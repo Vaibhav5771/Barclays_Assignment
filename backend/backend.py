@@ -10,7 +10,10 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -232,3 +235,92 @@ def dashboard_metrics():
             { "type": "Credit Limit Freeze", "success": 60, "total": 90 }
         ]
     }
+
+@app.get("/customers")
+def get_customers():
+    print("🚨 /customers HIT")
+
+    raw_customers = [
+        {
+            "id": 1,
+            "name": "Rohan Sharma",
+            "accountNumber": "ACC-10021",
+
+            # RAW INPUTS (same schema as /predict)
+            "limit_bal": 200000,
+            "sex": 2,
+            "education": 2,
+            "marriage": 1,
+            "age": 35,
+
+            "pay_0": 0,
+            "pay_2": 0,
+            "pay_3": 1,
+            "pay_4": 0,
+            "pay_5": 0,
+            "pay_6": 0,
+
+            "bill_amt1": 50000,
+            "bill_amt2": 48000,
+            "bill_amt3": 47000,
+            "bill_amt4": 46000,
+            "bill_amt5": 45000,
+            "bill_amt6": 44000,
+
+            "pay_amt1": 5000,
+            "pay_amt2": 6000,
+            "pay_amt3": 7000,
+            "pay_amt4": 6000,
+            "pay_amt5": 6000,
+            "pay_amt6": 8000
+        }
+    ]
+
+    customers = []
+
+    for c in raw_customers:
+        try:
+            # ✅ ONLY pass model input fields
+            model_input = {
+                k: c[k] for k in [
+                    "limit_bal", "sex", "education", "marriage", "age",
+                    "pay_0", "pay_2", "pay_3", "pay_4", "pay_5", "pay_6",
+                    "bill_amt1", "bill_amt2", "bill_amt3",
+                    "bill_amt4", "bill_amt5", "bill_amt6",
+                    "pay_amt1", "pay_amt2", "pay_amt3",
+                    "pay_amt4", "pay_amt5", "pay_amt6",
+                ]
+            }
+
+            df = pd.DataFrame([model_input])
+
+            # 🔍 Debug: PROVE feature alignment
+            print("📊 Input columns:", df.columns.tolist())
+
+            risk_score, level, _, _ = compute_prediction(df)
+
+        except Exception as e:
+            # 🛡 Never crash endpoint
+            print("❌ ML FAILED:", e)
+            risk_score = 0.5
+            level = "MEDIUM RISK"
+
+        customers.append({
+            "id": c["id"],
+            "name": c["name"],
+            "accountNumber": c["accountNumber"],
+            "riskScore": round(risk_score, 2),
+            "riskBucket": level.replace(" RISK", ""),
+            "utilizationRate": c["bill_amt6"] / c["limit_bal"],
+            "currentBalance": c["bill_amt6"],
+            "creditLimit": c["limit_bal"],
+            "averagePaymentDelay": int(
+                sum([c["pay_0"], c["pay_2"], c["pay_3"], c["pay_4"], c["pay_5"], c["pay_6"]]) / 6
+            ),
+            "daysSinceLastPayment": 18,
+            "paymentCoverageRatio": 0.65,
+            "trend": "down",
+            "behaviorFlags": ["Late payment history"]
+        })
+
+    return customers
