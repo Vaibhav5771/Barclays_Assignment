@@ -1,6 +1,6 @@
 // src/pages/ManualAssessment.tsx
-import { useState } from "react";
-import { Shield, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Shield, AlertTriangle, CheckCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 
 interface PredictionResult {
     risk_score: number;
@@ -39,7 +39,39 @@ export default function ManualAssessment() {
     const [result, setResult] = useState<PredictionResult | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [showAllFields, setShowAllFields] = useState(false);
+    const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+    const [expandedSections, setExpandedSections] = useState({
+        basic: true,
+        payment: false,
+        bills: false,
+        payments: false
+    });
+
+    const formRef = useRef<HTMLDivElement>(null);
+
+    // API Base URL - Using your render.com backend
+    const API_BASE_URL = "https://barclays-assignment.onrender.com";
+
+    // Check backend health on component mount
+    useEffect(() => {
+        checkBackendHealth();
+    }, []);
+
+    const checkBackendHealth = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/health`);
+            if (res.ok) {
+                setBackendStatus('online');
+                console.log('✅ Backend is online');
+            } else {
+                setBackendStatus('offline');
+                console.log('❌ Backend returned error');
+            }
+        } catch (err) {
+            setBackendStatus('offline');
+            console.log('❌ Backend is offline');
+        }
+    };
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setForm((prev) => ({
@@ -68,56 +100,82 @@ export default function ManualAssessment() {
         try {
             const payload = buildPayload();
 
-            const res = await fetch("https://barclays-assignment.onrender.com/predict", {
+            console.log('📤 Sending request to:', `${API_BASE_URL}/predict`);
+            console.log('📦 Payload:', payload);
+
+            const res = await fetch(`${API_BASE_URL}/predict`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json"
+                },
                 body: JSON.stringify(payload),
             });
 
             if (!res.ok) {
-                throw new Error(`Server responded with ${res.status}`);
+                const errorText = await res.text();
+                throw new Error(`Server responded with ${res.status}: ${errorText}`);
             }
 
             const data = await res.json();
+            console.log('📥 Response:', data);
 
             if (data.error) {
                 throw new Error(data.error);
             }
 
             setResult(data);
+
+            // Scroll to results on mobile
+            setTimeout(() => {
+                document.getElementById('results-section')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }, 100);
+
         } catch (err: any) {
-            console.error(err);
-            setError(err.message || "Failed to connect to prediction service");
+            console.error('❌ Prediction error:', err);
+
+            if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
+                setError(
+                    'Cannot connect to backend server.\n' +
+                    'Please ensure:\n' +
+                    '• The backend is running on render.com\n' +
+                    '• You have internet connection\n' +
+                    '• CORS is properly configured'
+                );
+            } else {
+                setError(err.message || "Failed to connect to prediction service");
+            }
         } finally {
             setLoading(false);
         }
     };
-
-// In ManualAssessment.tsx, update the loadDemo function:
 
     const loadDemo = (type: "low" | "medium" | "high") => {
         let demo: Partial<typeof form> = {};
 
         if (type === "low") {
             demo = {
-                limit_bal: "200000",     // High credit limit
+                limit_bal: "200000",
                 age: "35",
                 sex: "2",
                 education: "2",
                 marriage: "1",
-                pay_0: "-1",              // No delay (paid early)
-                pay_2: "-1",              // No delay
-                pay_3: "0",                // Paid on time
-                pay_4: "0",                // Paid on time
-                pay_5: "-1",               // Paid early
-                pay_6: "0",                // Paid on time
+                pay_0: "-1",
+                pay_2: "-1",
+                pay_3: "0",
+                pay_4: "0",
+                pay_5: "-1",
+                pay_6: "0",
                 bill_amt1: "50000",
                 bill_amt2: "48000",
                 bill_amt3: "47000",
                 bill_amt4: "46000",
                 bill_amt5: "45000",
-                bill_amt6: "44000",        // Decreasing balance
-                pay_amt1: "15000",          // High payments
+                bill_amt6: "44000",
+                pay_amt1: "15000",
                 pay_amt2: "14000",
                 pay_amt3: "13000",
                 pay_amt4: "12000",
@@ -132,19 +190,19 @@ export default function ManualAssessment() {
                 sex: "1",
                 education: "2",
                 marriage: "2",
-                pay_0: "1",                // 1-month delay
-                pay_2: "1",                // 1-month delay
-                pay_3: "0",                // Paid on time
-                pay_4: "1",                // 1-month delay
-                pay_5: "0",                // Paid on time
-                pay_6: "1",                // 1-month delay
+                pay_0: "1",
+                pay_2: "1",
+                pay_3: "0",
+                pay_4: "1",
+                pay_5: "0",
+                pay_6: "1",
                 bill_amt1: "35000",
                 bill_amt2: "36000",
                 bill_amt3: "37000",
                 bill_amt4: "38000",
                 bill_amt5: "39000",
-                bill_amt6: "40000",         // Increasing balance
-                pay_amt1: "5000",           // Moderate payments
+                bill_amt6: "40000",
+                pay_amt1: "5000",
                 pay_amt2: "4500",
                 pay_amt3: "4000",
                 pay_amt4: "3500",
@@ -154,36 +212,43 @@ export default function ManualAssessment() {
         }
         else if (type === "high") {
             demo = {
-                limit_bal: "30000",         // Low credit limit (maxed out)
+                limit_bal: "30000",
                 age: "28",
                 sex: "1",
                 education: "1",
                 marriage: "2",
-                pay_0: "3",                 // 3-month delay (severe)
-                pay_2: "3",                 // 3-month delay
-                pay_3: "2",                 // 2-month delay
-                pay_4: "2",                 // 2-month delay
-                pay_5: "3",                 // 3-month delay
-                pay_6: "3",                 // 3-month delay
-                bill_amt1: "28000",          // Near limit
-                bill_amt2: "29000",          // Increasing
-                bill_amt3: "30000",          // Maxed out
-                bill_amt4: "30000",          // Still maxed
-                bill_amt5: "30000",          // Still maxed
-                bill_amt6: "30000",          // Still maxed
-                pay_amt1: "500",             // Very low payments
+                pay_0: "3",
+                pay_2: "3",
+                pay_3: "2",
+                pay_4: "2",
+                pay_5: "3",
+                pay_6: "3",
+                bill_amt1: "28000",
+                bill_amt2: "29000",
+                bill_amt3: "30000",
+                bill_amt4: "30000",
+                bill_amt5: "30000",
+                bill_amt6: "30000",
+                pay_amt1: "500",
                 pay_amt2: "400",
                 pay_amt3: "300",
                 pay_amt4: "200",
                 pay_amt5: "100",
-                pay_amt6: "50",              // Barely any payment
+                pay_amt6: "50",
             };
         }
 
         setForm((prev) => ({ ...prev, ...demo }));
 
-        // Optional: Auto-predict after loading demo
-        // setTimeout(predict, 500);
+        // Expand all sections on mobile when demo is loaded
+        if (window.innerWidth < 640) {
+            setExpandedSections({
+                basic: true,
+                payment: true,
+                bills: true,
+                payments: true
+            });
+        }
     };
 
     const getRiskStyle = () => {
@@ -191,6 +256,13 @@ export default function ManualAssessment() {
         if (result.risk_level.includes("LOW")) return "bg-emerald-50 border-emerald-200 text-emerald-800";
         if (result.risk_level.includes("MEDIUM")) return "bg-amber-50 border-amber-200 text-amber-800";
         return "bg-rose-50 border-rose-200 text-rose-800";
+    };
+
+    const toggleSection = (section: keyof typeof expandedSections) => {
+        setExpandedSections(prev => ({
+            ...prev,
+            [section]: !prev[section]
+        }));
     };
 
     const renderField = (name: string, label: string, options?: { min?: number; max?: number; type?: string }) => {
@@ -214,10 +286,37 @@ export default function ManualAssessment() {
         );
     };
 
+    const renderSection = (
+        title: string,
+        sectionKey: keyof typeof expandedSections,
+        fields: { name: string; label: string; options?: any }[]
+    ) => {
+        const isExpanded = expandedSections[sectionKey];
+
+        return (
+            <div className="border border-slate-200 rounded-lg overflow-hidden mb-4">
+                <button
+                    type="button"
+                    onClick={() => toggleSection(sectionKey)}
+                    className="w-full flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100 transition-colors"
+                >
+                    <span className="font-medium text-slate-900">{title}</span>
+                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </button>
+
+                {isExpanded && (
+                    <div className="p-4 grid grid-cols-1 gap-4">
+                        {fields.map(field => renderField(field.name, field.label, field.options))}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
     return (
-        <div className="space-y-4 sm:space-y-6">
-            {/* Header Section - Stack on mobile */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="space-y-4 sm:space-y-6 pb-8">
+            {/* Header Section */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sticky top-0 bg-slate-50 py-2 z-10">
                 <div>
                     <h2 className="text-xl sm:text-2xl font-bold text-slate-900">
                         Manual Risk Assessment
@@ -227,119 +326,169 @@ export default function ManualAssessment() {
                     </p>
                 </div>
 
-                {/* Demo Buttons - Scrollable on mobile */}
-                <div className="flex gap-2 overflow-x-auto pb-2 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0">
-                    <button
-                        onClick={() => loadDemo("low")}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap flex-shrink-0"
-                    >
-                        Low Risk Demo
-                    </button>
-                    <button
-                        onClick={() => loadDemo("medium")}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap flex-shrink-0"
-                    >
-                        Medium Risk Demo
-                    </button>
-                    <button
-                        onClick={() => loadDemo("high")}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap flex-shrink-0"
-                    >
-                        High Risk Demo
-                    </button>
+                {/* Backend Status Indicator */}
+                <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                        backendStatus === 'online' ? 'bg-green-500 animate-pulse' :
+                            backendStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
+                    }`} />
+                    <span className="text-xs text-slate-600">
+                        {backendStatus === 'online' ? 'Backend Connected' :
+                            backendStatus === 'offline' ? 'Backend Offline' : 'Checking...'}
+                    </span>
                 </div>
             </div>
 
-            {/* Form */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6">
-                {/* Expand/Collapse for mobile */}
-                <div className="sm:hidden mb-4">
-                    <button
-                        onClick={() => setShowAllFields(!showAllFields)}
-                        className="text-blue-600 text-sm font-medium"
-                    >
-                        {showAllFields ? "Show fewer fields" : "Show all fields"}
-                    </button>
+            {/* Demo Buttons - Scrollable on mobile */}
+            <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sticky top-20 bg-slate-50 z-10">
+                <button
+                    onClick={() => loadDemo("low")}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap flex-shrink-0"
+                >
+                    Low Risk Demo
+                </button>
+                <button
+                    onClick={() => loadDemo("medium")}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap flex-shrink-0"
+                >
+                    Medium Risk Demo
+                </button>
+                <button
+                    onClick={() => loadDemo("high")}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs sm:text-sm font-medium transition whitespace-nowrap flex-shrink-0"
+                >
+                    High Risk Demo
+                </button>
+            </div>
+
+            {/* Backend Offline Warning */}
+            {backendStatus === 'offline' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                    <p className="text-sm text-amber-800 flex items-center gap-2">
+                        <AlertTriangle size={16} />
+                        ⚠️ Backend server is not responding. Make sure it's running on render.com
+                    </p>
+                </div>
+            )}
+
+            {/* Form - Now with collapsible sections on mobile */}
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" ref={formRef}>
+                {/* Mobile View - Collapsible Sections */}
+                <div className="block sm:hidden">
+                    {renderSection("Basic Information", "basic", [
+                        { name: "limit_bal", label: "Limit Balance ($)", options: { type: "number" } },
+                        { name: "age", label: "Age", options: { type: "number", min: 18, max: 100 } },
+                        { name: "sex", label: "Sex (1 = male, 2 = female)", options: { type: "number", min: 1, max: 2 } },
+                        { name: "education", label: "Education (1–6)", options: { type: "number", min: 1, max: 6 } },
+                        { name: "marriage", label: "Marriage (1-3)", options: { type: "number", min: 1, max: 3 } },
+                    ])}
+
+                    {renderSection("Payment Status (Last 6 months)", "payment", [
+                        { name: "pay_0", label: "PAY_0 (September)" },
+                        { name: "pay_2", label: "PAY_2 (August)" },
+                        { name: "pay_3", label: "PAY_3 (July)" },
+                        { name: "pay_4", label: "PAY_4 (June)" },
+                        { name: "pay_5", label: "PAY_5 (May)" },
+                        { name: "pay_6", label: "PAY_6 (April)" },
+                    ])}
+
+                    {renderSection("Bill Amounts", "bills", [
+                        { name: "bill_amt1", label: "Bill Amount (September)" },
+                        { name: "bill_amt2", label: "Bill Amount (August)" },
+                        { name: "bill_amt3", label: "Bill Amount (July)" },
+                        { name: "bill_amt4", label: "Bill Amount (June)" },
+                        { name: "bill_amt5", label: "Bill Amount (May)" },
+                        { name: "bill_amt6", label: "Bill Amount (April)" },
+                    ])}
+
+                    {renderSection("Payment Amounts", "payments", [
+                        { name: "pay_amt1", label: "Payment Amount (September)" },
+                        { name: "pay_amt2", label: "Payment Amount (August)" },
+                        { name: "pay_amt3", label: "Payment Amount (July)" },
+                        { name: "pay_amt4", label: "Payment Amount (June)" },
+                        { name: "pay_amt5", label: "Payment Amount (May)" },
+                        { name: "pay_amt6", label: "Payment Amount (April)" },
+                    ])}
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-                    {/* Basic Info - Always visible */}
-                    {renderField("limit_bal", "Limit Balance ($)", { type: "number" })}
-                    {renderField("age", "Age", { type: "number", min: 18, max: 100 })}
-                    {renderField("sex", "Sex (1 = male, 2 = female)", { type: "number", min: 1, max: 2 })}
-                    {renderField("education", "Education (1–6)", { type: "number", min: 1, max: 6 })}
-                    {renderField("marriage", "Marriage (1-3)", { type: "number", min: 1, max: 3 })}
+                {/* Desktop View - Grid Layout */}
+                <div className="hidden sm:block p-6">
+                    <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
+                        {/* Basic Info */}
+                        {renderField("limit_bal", "Limit Balance ($)", { type: "number" })}
+                        {renderField("age", "Age", { type: "number", min: 18, max: 100 })}
+                        {renderField("sex", "Sex (1 = male, 2 = female)", { type: "number", min: 1, max: 2 })}
+                        {renderField("education", "Education (1–6)", { type: "number", min: 1, max: 6 })}
+                        {renderField("marriage", "Marriage (1-3)", { type: "number", min: 1, max: 3 })}
 
-                    {/* Conditional rendering based on screen size or expand state */}
-                    {(showAllFields || window.innerWidth >= 640) && (
-                        <>
-                            {/* Payment Status Fields */}
-                            {renderField("pay_0", "PAY_0 (Sep repayment)")}
-                            {renderField("pay_2", "PAY_2 (Aug repayment)")}
-                            {renderField("pay_3", "PAY_3 (Jul repayment)")}
-                            {renderField("pay_4", "PAY_4 (Jun repayment)")}
-                            {renderField("pay_5", "PAY_5 (May repayment)")}
-                            {renderField("pay_6", "PAY_6 (Apr repayment)")}
+                        {/* Payment Status Fields */}
+                        {renderField("pay_0", "PAY_0 (Sep repayment)")}
+                        {renderField("pay_2", "PAY_2 (Aug repayment)")}
+                        {renderField("pay_3", "PAY_3 (Jul repayment)")}
+                        {renderField("pay_4", "PAY_4 (Jun repayment)")}
+                        {renderField("pay_5", "PAY_5 (May repayment)")}
+                        {renderField("pay_6", "PAY_6 (Apr repayment)")}
 
-                            {/* Bill Amount Fields */}
-                            {renderField("bill_amt1", "Bill Amount (Sep)")}
-                            {renderField("bill_amt2", "Bill Amount (Aug)")}
-                            {renderField("bill_amt3", "Bill Amount (Jul)")}
-                            {renderField("bill_amt4", "Bill Amount (Jun)")}
-                            {renderField("bill_amt5", "Bill Amount (May)")}
-                            {renderField("bill_amt6", "Bill Amount (Apr)")}
+                        {/* Bill Amount Fields */}
+                        {renderField("bill_amt1", "Bill Amount (Sep)")}
+                        {renderField("bill_amt2", "Bill Amount (Aug)")}
+                        {renderField("bill_amt3", "Bill Amount (Jul)")}
+                        {renderField("bill_amt4", "Bill Amount (Jun)")}
+                        {renderField("bill_amt5", "Bill Amount (May)")}
+                        {renderField("bill_amt6", "Bill Amount (Apr)")}
 
-                            {/* Payment Amount Fields */}
-                            {renderField("pay_amt1", "Payment Amount (Sep)")}
-                            {renderField("pay_amt2", "Payment Amount (Aug)")}
-                            {renderField("pay_amt3", "Payment Amount (Jul)")}
-                            {renderField("pay_amt4", "Payment Amount (Jun)")}
-                            {renderField("pay_amt5", "Payment Amount (May)")}
-                            {renderField("pay_amt6", "Payment Amount (Apr)")}
-                        </>
-                    )}
+                        {/* Payment Amount Fields */}
+                        {renderField("pay_amt1", "Payment Amount (Sep)")}
+                        {renderField("pay_amt2", "Payment Amount (Aug)")}
+                        {renderField("pay_amt3", "Payment Amount (Jul)")}
+                        {renderField("pay_amt4", "Payment Amount (Jun)")}
+                        {renderField("pay_amt5", "Payment Amount (May)")}
+                        {renderField("pay_amt6", "Payment Amount (Apr)")}
+                    </div>
                 </div>
 
-                {/* Action Buttons - Stack on mobile */}
-                <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row gap-3 sm:gap-4">
-                    <button
-                        onClick={predict}
-                        disabled={loading}
-                        className={`flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
-                            loading ? "animate-pulse" : ""
-                        }`}
-                    >
-                        {loading && <Loader2 className="animate-spin" size={18} />}
-                        {loading ? "Predicting..." : "Predict Risk"}
-                    </button>
+                {/* Action Buttons - Always visible */}
+                <div className="p-4 sm:p-6 border-t border-slate-200">
+                    <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+                        <button
+                            onClick={predict}
+                            disabled={loading || backendStatus === 'offline'}
+                            className={`flex-1 flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed ${
+                                loading ? "animate-pulse" : ""
+                            }`}
+                        >
+                            {loading && <Loader2 className="animate-spin" size={18} />}
+                            {loading ? "Predicting..." : "Predict Risk"}
+                        </button>
 
-                    <button
-                        onClick={() => {
-                            setForm(Object.fromEntries(Object.keys(form).map(k => [k, ""])));
-                            setResult(null);
-                            setError(null);
-                        }}
-                        className="px-4 sm:px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-medium transition"
-                    >
-                        Clear Form
-                    </button>
+                        <button
+                            onClick={() => {
+                                setForm(Object.fromEntries(Object.keys(form).map(k => [k, ""])));
+                                setResult(null);
+                                setError(null);
+                            }}
+                            className="flex-1 px-4 sm:px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-lg font-medium transition"
+                        >
+                            Clear Form
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            {/* Error Message - Responsive */}
+            {/* Error Message */}
             {error && (
                 <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 sm:p-5 text-rose-800 flex items-start gap-3">
                     <AlertTriangle size={18} sm:size={20} className="mt-0.5 flex-shrink-0" />
                     <div className="min-w-0">
                         <p className="font-medium text-sm sm:text-base">Error</p>
-                        <p className="text-xs sm:text-sm mt-1 break-words">{error}</p>
+                        <p className="text-xs sm:text-sm mt-1 break-words whitespace-pre-line">{error}</p>
                     </div>
                 </div>
             )}
 
-            {/* Result - Responsive */}
+            {/* Result */}
             {result && (
-                <div className={`rounded-xl border p-4 sm:p-6 ${getRiskStyle()}`}>
+                <div id="results-section" className={`rounded-xl border p-4 sm:p-6 ${getRiskStyle()}`}>
                     <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
                         {result.risk_level.includes("LOW") && <CheckCircle className="text-emerald-600" size={20} sm:size={28} />}
                         {result.risk_level.includes("MEDIUM") && <AlertTriangle className="text-amber-600" size={20} sm:size={28} />}
