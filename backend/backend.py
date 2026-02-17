@@ -228,7 +228,7 @@ def compute_prediction(input_df: pd.DataFrame):
 
 # ---------------- API ENDPOINTS ----------------
 @app.post("/predict")
-async def predict(data: CustomerData, request: Request):
+async def predict_csv(request: Request, file: UploadFile = File(...)):
     """Single customer prediction endpoint"""
     if model is None:
         return JSONResponse(
@@ -265,7 +265,7 @@ async def predict(data: CustomerData, request: Request):
         )
 
 @app.post("/predict_csv")
-async def predict_csv(file: UploadFile = File(...), request: Request):
+async def predict_csv(request: Request, file: UploadFile = File(...)):
     """Batch prediction from CSV file"""
     if model is None:
         return JSONResponse(
