@@ -10,10 +10,12 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-# Define allowed origins
+# Define allowed origins - include the port 5174 that's in your error
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://localhost:5174",  # Added this since error shows localhost:5174
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",  # Added this too
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "https://barclaysassignment.netlify.app",
@@ -21,56 +23,19 @@ ALLOWED_ORIGINS = [
 ]
 
 print("="*50)
-print("="*50)
 print(f"📋 Allowed Origins: {ALLOWED_ORIGINS}")
 print(f"📂 Files in directory: {os.listdir()}")
 
-# CORS Middleware
+# CORS Middleware - This should handle OPTIONS preflight requests automatically
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allow all methods
+    allow_headers=["*"],  # Allow all headers
     expose_headers=["*"],
     max_age=3600,
 )
-
-# Add middleware to ensure CORS headers on all responses
-@app.middleware("http")
-async def add_cors_header(request: Request, call_next):
-    response = await call_next(request)
-
-    # Get the origin from the request
-    origin = request.headers.get("origin")
-
-    # If the origin is allowed, add CORS headers
-    if origin in ALLOWED_ORIGINS or (origin and ("netlify.app" in origin or "localhost" in origin)):
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, HEAD"
-        response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Accept, Origin"
-        response.headers["Access-Control-Expose-Headers"] = "Content-Length, Content-Type"
-
-    return response
-
-# Handle OPTIONS requests explicitly
-@app.options("/{path:path}")
-async def options_handler(request: Request, path: str):
-    origin = request.headers.get("origin")
-
-    if origin in ALLOWED_ORIGINS or (origin and ("netlify.app" in origin or "localhost" in origin)):
-        headers = {
-            "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, HEAD",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Accept, Origin",
-            "Access-Control-Allow-Credentials": "true",
-            "Access-Control-Max-Age": "3600",
-            "Access-Control-Expose-Headers": "Content-Length, Content-Type",
-        }
-        return JSONResponse(content={}, status_code=200, headers=headers)
-
-    return JSONResponse(content={"error": "Origin not allowed"}, status_code=400)
 
 # ---------------- MODEL LOADING ----------------
 MODEL_PATH = "pre_delinquency_model.pkl"
@@ -100,28 +65,14 @@ async def root():
     }
 
 @app.get("/health")
-async def health(request: Request):
+async def health():
     """Health check endpoint"""
-    origin = request.headers.get("origin")
     return {
         "status": "healthy",
         "model_loaded": model is not None,
         "cors_configured": True,
         "allowed_origins": ALLOWED_ORIGINS,
-        "request_origin": origin,
         "python_version": sys.version
-    }
-
-@app.get("/test")
-async def test_cors(request: Request):
-    """Test CORS endpoint"""
-    origin = request.headers.get("origin")
-    return {
-        "message": "CORS is working!",
-        "origin": origin,
-        "allowed_origins": ALLOWED_ORIGINS,
-        "headers": dict(request.headers),
-        "method": request.method
     }
 
 @app.get("/debug")
@@ -171,6 +122,9 @@ def compute_prediction(input_df: pd.DataFrame):
     """
     Compute risk prediction from input features
     """
+    if model is None:
+        raise Exception("Model not loaded")
+
     df = input_df.copy()
 
     pay_cols = ["pay_0", "pay_2", "pay_3", "pay_4", "pay_5", "pay_6"]
@@ -205,10 +159,6 @@ def compute_prediction(input_df: pd.DataFrame):
     ]
 
     X = df[feature_order]
-
-    if model is None:
-        raise Exception("Model not loaded")
-
     risk_score = float(model.predict_proba(X)[0][1])
 
     if risk_score < 0.3:
@@ -228,7 +178,7 @@ def compute_prediction(input_df: pd.DataFrame):
 
 # ---------------- API ENDPOINTS ----------------
 @app.post("/predict")
-async def predict_csv(request: Request, file: UploadFile = File(...)):
+async def predict(data: CustomerData, request: Request):
     """Single customer prediction endpoint"""
     if model is None:
         return JSONResponse(
@@ -247,15 +197,7 @@ async def predict_csv(request: Request, file: UploadFile = File(...)):
             "reason": reason
         }
 
-        # Create response with CORS headers
-        origin = request.headers.get("origin")
-        response = JSONResponse(content=result)
-
-        if origin in ALLOWED_ORIGINS or (origin and ("netlify.app" in origin or "localhost" in origin)):
-            response.headers["Access-Control-Allow-Origin"] = origin
-            response.headers["Access-Control-Allow-Credentials"] = "true"
-
-        return response
+        return JSONResponse(content=result)
 
     except Exception as e:
         print(traceback.format_exc())
@@ -265,7 +207,7 @@ async def predict_csv(request: Request, file: UploadFile = File(...)):
         )
 
 @app.post("/predict_csv")
-async def predict_csv(request: Request, file: UploadFile = File(...)):
+async def predict_csv(file: UploadFile = File(...)):
     """Batch prediction from CSV file"""
     if model is None:
         return JSONResponse(
@@ -303,7 +245,7 @@ async def predict_csv(request: Request, file: UploadFile = File(...)):
         )
 
 @app.get("/dashboard-metrics")
-async def dashboard_metrics(request: Request):
+async def dashboard_metrics():
     """Dashboard metrics endpoint"""
     print("📊 Dashboard metrics requested")
 
@@ -336,24 +278,12 @@ async def dashboard_metrics(request: Request):
         ]
     }
 
-    # Create response with CORS headers
-    origin = request.headers.get("origin")
-    response = JSONResponse(content=data)
-
-    if origin in ALLOWED_ORIGINS or (origin and ("netlify.app" in origin or "localhost" in origin)):
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        print(f"✅ Added CORS headers for origin: {origin}")
-    else:
-        print(f"⚠️ Origin not allowed: {origin}")
-
-    return response
+    return JSONResponse(content=data)
 
 @app.get("/customers")
-async def get_customers(request: Request):
+async def get_customers():
     """Get customers with risk scores"""
     print("🚨 /customers HIT")
-    print(f"📨 Request origin: {request.headers.get('origin')}")
 
     raw_customers = [
         {
@@ -425,19 +355,8 @@ async def get_customers(request: Request):
             "behaviorFlags": ["Late payment history"]
         })
 
-    # Create response with CORS headers
-    origin = request.headers.get("origin")
-    response = JSONResponse(content=customers)
-
-    if origin in ALLOWED_ORIGINS or (origin and ("netlify.app" in origin or "localhost" in origin)):
-        response.headers["Access-Control-Allow-Origin"] = origin
-        response.headers["Access-Control-Allow-Credentials"] = "true"
-        print(f"✅ Added CORS headers for origin: {origin}")
-    else:
-        print(f"⚠️ Origin not allowed: {origin}")
-
     print(f"📊 Returning {len(customers)} customers")
-    return response
+    return JSONResponse(content=customers)
 
 # Run the application
 if __name__ == "__main__":
