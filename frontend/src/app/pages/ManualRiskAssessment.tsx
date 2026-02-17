@@ -1,6 +1,7 @@
 // src/pages/ManualAssessment.tsx
 import { useState, useEffect, useRef } from "react";
 import { Shield, AlertTriangle, CheckCircle, Loader2, ChevronDown, ChevronUp } from "lucide-react";
+import axios from 'axios';
 
 interface PredictionResult {
     risk_score: number;
@@ -50,7 +51,8 @@ export default function ManualAssessment() {
     const formRef = useRef<HTMLDivElement>(null);
 
     // API Base URL - Using your render.com backend
-    const API_BASE_URL = "https://barclays-assignment.onrender.com";
+    // API Base URL - Use environment variable with fallback for local development
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
     // Check backend health on component mount
     useEffect(() => {
@@ -81,72 +83,100 @@ export default function ManualAssessment() {
         setError(null);
     };
 
-    const buildPayload = () => {
-        const payload: any = {};
+    const buildPayload = (data) => ({
+        limit_bal:  parseFloat(data.limit_bal  || 0),
+        age:        parseInt  (data.age        || 0),
+        sex:        parseInt  (data.sex        || 1),
+        education:  parseInt  (data.education  || 1),
+        marriage:   parseInt  (data.marriage   || 1),
 
-        // Include all fields, defaulting to 0 if empty
-        Object.keys(form).forEach(key => {
-            payload[key] = parseFloat(form[key as keyof typeof form]) || 0;
-        });
+        pay_0: parseInt(data.pay_0 || 0),
+        pay_2: parseInt(data.pay_2 || 0),
+        pay_3: parseInt(data.pay_3 || 0),
+        pay_4: parseInt(data.pay_4 || 0),
+        pay_5: parseInt(data.pay_5 || 0),
+        pay_6: parseInt(data.pay_6 || 0),
 
-        return payload;
-    };
+        bill_amt1: parseFloat(data.bill_amt1 || 0),
+        bill_amt2: 0,   // or parseFloat(data.bill_amt2 || 0) if you add the field later
+        bill_amt3: 0,
+        bill_amt4: 0,
+        bill_amt5: 0,
+        bill_amt6: parseFloat(data.bill_amt6 || 0),
+
+        pay_amt1:  parseFloat(data.pay_amt1  || 0),
+        pay_amt2:  0,
+        pay_amt3:  0,
+        pay_amt4:  0,
+        pay_amt5:  0,
+        pay_amt6:  parseFloat(data.pay_amt6  || 0)
+    });
+
+    // In your ManualRiskAssessment.tsx, find the predict function around line 117
 
     const predict = async () => {
-        setLoading(true);
-        setError(null);
-        setResult(null);
-
         try {
-            const payload = buildPayload();
+            setLoading(true);
+            setError(null);
 
-            console.log('📤 Sending request to:', `${API_BASE_URL}/predict`);
-            console.log('📦 Payload:', payload);
+            // Force integer fields to be actual integers (no .0)
+            const safeParseInt = (val: string, defaultVal: number = 0) => {
+                const num = parseInt(val, 10);
+                return isNaN(num) ? defaultVal : num;
+            };
 
-            const res = await fetch(`${API_BASE_URL}/predict`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept": "application/json"
-                },
-                body: JSON.stringify(payload),
-            });
+            const safeParseFloat = (val: string, defaultVal: number = 0) => {
+                const num = parseFloat(val);
+                return isNaN(num) ? defaultVal : num;
+            };
 
-            if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(`Server responded with ${res.status}: ${errorText}`);
-            }
+            const payload = {
+                limit_bal: safeParseFloat(form.limit_bal),
+                age:       safeParseInt(form.age),
+                sex:       safeParseInt(form.sex, 1),
+                education: safeParseInt(form.education, 2),
+                marriage:  safeParseInt(form.marriage, 1),
 
-            const data = await res.json();
-            console.log('📥 Response:', data);
+                pay_0: safeParseInt(form.pay_0),
+                pay_2: safeParseInt(form.pay_2),
+                pay_3: safeParseInt(form.pay_3),
+                pay_4: safeParseInt(form.pay_4),
+                pay_5: safeParseInt(form.pay_5),
+                pay_6: safeParseInt(form.pay_6),
 
-            if (data.error) {
-                throw new Error(data.error);
-            }
+                bill_amt1: safeParseFloat(form.bill_amt1),
+                bill_amt2: safeParseFloat(form.bill_amt2),
+                bill_amt3: safeParseFloat(form.bill_amt3),
+                bill_amt4: safeParseFloat(form.bill_amt4),
+                bill_amt5: safeParseFloat(form.bill_amt5),
+                bill_amt6: safeParseFloat(form.bill_amt6),
 
-            setResult(data);
+                pay_amt1: safeParseFloat(form.pay_amt1),
+                pay_amt2: safeParseFloat(form.pay_amt2),
+                pay_amt3: safeParseFloat(form.pay_amt3),
+                pay_amt4: safeParseFloat(form.pay_amt4),
+                pay_amt5: safeParseFloat(form.pay_amt5),
+                pay_amt6: safeParseFloat(form.pay_amt6),
+            };
 
-            // Scroll to results on mobile
-            setTimeout(() => {
-                document.getElementById('results-section')?.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
-            }, 100);
+            console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
 
-        } catch (err: any) {
-            console.error('❌ Prediction error:', err);
+            const response = await axios.post(
+                `${API_BASE_URL}/predict`,   // ← better to use the variable here too
+                payload,
+                { headers: { 'Content-Type': 'application/json' } }
+            );
 
-            if (err.message.includes('Failed to fetch') || err.name === 'TypeError') {
-                setError(
-                    'Cannot connect to backend server.\n' +
-                    'Please ensure:\n' +
-                    '• The backend is running on render.com\n' +
-                    '• You have internet connection\n' +
-                    '• CORS is properly configured'
-                );
+            console.log('✅ Response:', response.data);
+            setResult(response.data);
+
+            // scroll...
+        } catch (error: any) {
+            console.error('❌ Prediction error:', error);
+            if (error.response?.status === 422) {
+                setError("Validation error: " + (error.response.data?.detail?.[0]?.msg || "Check all fields are valid numbers"));
             } else {
-                setError(err.message || "Failed to connect to prediction service");
+                setError(error.message || 'Failed to get prediction');
             }
         } finally {
             setLoading(false);
