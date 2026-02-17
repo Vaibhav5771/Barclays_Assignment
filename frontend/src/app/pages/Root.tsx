@@ -18,41 +18,52 @@ export function Root() {
 
     return (
         <div className="min-h-screen bg-slate-50">
-            {/* Header */}
+            {/* Header - Mobile Responsive */}
             <header className="bg-white border-b border-slate-200 sticky top-0 z-50">
-                <div className="px-6 py-4">
+                <div className="px-4 sm:px-6 py-3 sm:py-4">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className="w-14 h-14 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center overflow-hidden shadow-md">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            {/* Logo - Responsive sizing */}
+                            <div className="w-10 h-10 sm:w-14 sm:h-14 bg-gradient-to-br from-blue-600 to-blue-800 rounded-lg flex items-center justify-center overflow-hidden shadow-md flex-shrink-0">
                                 <img
                                     src="/assets/Logo.png"
                                     alt="PDIE Logo"
-                                    className="w-12 h-12 object-contain"
+                                    className="w-8 h-8 sm:w-12 sm:h-12 object-contain"
                                 />
                             </div>
-                            <div>
-                                <h1 className="text-xl font-bold text-slate-900">Pre-Delinquency Intervention Engine</h1>
-                                <p className="text-xs text-slate-600">Predictive Risk Management Platform</p>
+
+                            {/* Title - Hidden on very small screens, truncates on mobile */}
+                            <div className="min-w-0">
+                                <h1 className="text-sm sm:text-base md:text-xl font-bold text-slate-900 truncate">
+                                    Pre-Delinquency Intervention Engine
+                                </h1>
+                                <p className="text-xs text-slate-600 hidden sm:block">
+                                    Predictive Risk Management Platform
+                                </p>
+                                <p className="text-xs text-slate-600 sm:hidden">
+                                    PDIE Platform
+                                </p>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
-                            <button className="p-2 hover:bg-slate-100 rounded-lg relative">
-                                <Bell size={20} className="text-slate-600" />
-                                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                        {/* Action Buttons - Compact on mobile */}
+                        <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
+                            <button className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg relative">
+                                <Bell size={16} sm:size={20} className="text-slate-600" />
+                                <span className="absolute top-1 right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full"></span>
                             </button>
-                            <button className="p-2 hover:bg-slate-100 rounded-lg">
-                                <Settings size={20} className="text-slate-600" />
+                            <button className="p-1.5 sm:p-2 hover:bg-slate-100 rounded-lg">
+                                <Settings size={16} sm:size={20} className="text-slate-600" />
                             </button>
-                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center">
-                                <span className="text-white text-sm font-semibold">RC</span>
+                            <div className="w-7 h-7 sm:w-8 sm:h-8 bg-blue-600 rounded-full flex items-center justify-center">
+                                <span className="text-white text-xs sm:text-sm font-semibold">RC</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                {/* Navigation */}
-                <nav className="px-6 flex gap-1 border-t border-slate-200">
+                {/* Navigation - Scrollable on mobile */}
+                <nav className="px-4 sm:px-6 flex gap-1 border-t border-slate-200 overflow-x-auto hide-scrollbar">
                     {navigation.map((item) => {
                         const Icon = item.icon;
                         const active = isActive(item.href);
@@ -61,13 +72,13 @@ export function Root() {
                             <Link
                                 key={item.name}
                                 to={item.href}
-                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                                className={`flex items-center gap-1 sm:gap-2 px-3 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium border-b-2 transition-colors whitespace-nowrap flex-shrink-0 ${
                                     active
                                         ? 'border-blue-600 text-blue-600'
                                         : 'border-transparent text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                                 }`}
                             >
-                                <Icon size={16} />
+                                <Icon size={14} sm:size={16} />
                                 {item.name}
                             </Link>
                         );
@@ -75,19 +86,30 @@ export function Root() {
                 </nav>
             </header>
 
-            {/* Main Content */}
-            <main className="p-6">
+            {/* Main Content - Responsive padding */}
+            <main className="p-3 sm:p-4 md:p-6">
                 <div className="max-w-[1600px] mx-auto">
                     <Outlet />
                 </div>
             </main>
 
-            {/* Footer */}
-            <footer className="bg-white border-t border-slate-200 mt-12">
-                <div className="px-6 py-4 text-center text-sm text-slate-600">
+            {/* Footer - Responsive text */}
+            <footer className="bg-white border-t border-slate-200 mt-8 sm:mt-12">
+                <div className="px-4 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm text-slate-600">
                     © 2026 Pre-Delinquency Intervention Engine. Protecting customers and portfolio value through proactive intervention.
                 </div>
             </footer>
+
+            {/* Add this to your global CSS or in a style tag */}
+            <style>{`
+                .hide-scrollbar {
+                    -ms-overflow-style: none;
+                    scrollbar-width: none;
+                }
+                .hide-scrollbar::-webkit-scrollbar {
+                    display: none;
+                }
+            `}</style>
         </div>
     );
 }
