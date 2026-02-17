@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -6,14 +5,37 @@ import { Button } from '../components/ui/button';
 import { RiskBadge } from '../components/RiskBadge';
 import { TrendIndicator } from '../components/TrendIndicator';
 import { Search, Filter, ArrowUpDown, ChevronRight } from 'lucide-react';
-import { customers } from '../data/mockData';
+import { useEffect, useState } from 'react';
+import { fetchCustomers } from '../../../api/customersApi';
+
 
 export function Customers() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRisk, setFilterRisk] = useState<'All' | 'Low' | 'Medium' | 'High'>('All');
   const [sortBy, setSortBy] = useState<'risk' | 'name' | 'utilization'>('risk');
 
-  const filteredCustomers = customers
+    const [customers, setCustomers] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchCustomers()
+            .then((data) => {
+                console.log('👥 Customers from backend:', data);
+                setCustomers(data);
+            })
+            .finally(() => setLoading(false));
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="p-12 text-center text-slate-600">
+                Loading customers…
+            </div>
+        );
+    }
+
+
+    const filteredCustomers = customers
     .filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            customer.accountNumber.includes(searchTerm);

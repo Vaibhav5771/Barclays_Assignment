@@ -246,61 +246,6 @@ export function Dashboard() {
           </div>
         </Card>
       </div>
-
-      {/* Intervention Effectiveness */}
-      <Card className="p-6">
-        <h3 className="text-lg font-semibold text-slate-900 mb-1">Intervention Effectiveness</h3>
-        <p className="text-sm text-slate-600 mb-6">Success rate by intervention type (Last 90 days)</p>
-
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={interventionEffectiveness} layout="vertical">
-            <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
-            <XAxis type="number" stroke="#64748B" />
-            <YAxis dataKey="type" type="category" width={150} stroke="#64748B" />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="success" fill="#10B981" name="Successful" radius={[0, 4, 4, 0]} />
-            <Bar dataKey="total" fill="#E5E7EB" name="Total Attempted" radius={[0, 4, 4, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-6">
-          {interventionEffectiveness.map((item) => (
-            <div key={item.type} className="text-center p-3 bg-slate-50 rounded-lg">
-              <p className="text-xs text-slate-600 mb-1">{item.type}</p>
-              <p className="text-2xl font-bold text-slate-900">
-                {Math.round((item.success / item.total) * 100)}%
-              </p>
-              <p className="text-xs text-slate-500">{item.success}/{item.total} success</p>
-            </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Key Insights */}
-      <Card className="p-6 bg-gradient-to-br from-blue-50 to-slate-50 border-blue-200">
-        <h3 className="text-lg font-semibold text-slate-900 mb-4">Key Insights & Recommendations</h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-4 rounded-lg border border-slate-200">
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-amber-500 mt-2"></div>
-              <div>
-                <p className="font-semibold text-slate-900 mb-1">230 accounts in high-risk category</p>
-                <p className="text-sm text-slate-600">Consider scaling up proactive outreach efforts to prevent defaults</p>
-              </div>
-            </div>
-          </div>
-          <div className="bg-white p-4 rounded-lg border border-slate-200">
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 rounded-full bg-green-500 mt-2"></div>
-              <div>
-                <p className="font-semibold text-slate-900 mb-1">Intervention success rate at 73%</p>
-                <p className="text-sm text-slate-600">Early detection continues to deliver strong prevention results</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 }
