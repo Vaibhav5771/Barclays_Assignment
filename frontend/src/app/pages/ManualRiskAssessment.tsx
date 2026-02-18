@@ -50,8 +50,7 @@ export default function ManualAssessment() {
 
     const formRef = useRef<HTMLDivElement>(null);
 
-    // API Base URL - Using your render.com backend
-    // API Base URL - Use environment variable with fallback for local development
+    // API Base URL
     const API_BASE_URL = import.meta.env.VITE_API_URL || "http://127.0.0.1:8000";
 
     // Check backend health on component mount
@@ -83,43 +82,13 @@ export default function ManualAssessment() {
         setError(null);
     };
 
-    const buildPayload = (data) => ({
-        limit_bal:  parseFloat(data.limit_bal  || 0),
-        age:        parseInt  (data.age        || 0),
-        sex:        parseInt  (data.sex        || 1),
-        education:  parseInt  (data.education  || 1),
-        marriage:   parseInt  (data.marriage   || 1),
-
-        pay_0: parseInt(data.pay_0 || 0),
-        pay_2: parseInt(data.pay_2 || 0),
-        pay_3: parseInt(data.pay_3 || 0),
-        pay_4: parseInt(data.pay_4 || 0),
-        pay_5: parseInt(data.pay_5 || 0),
-        pay_6: parseInt(data.pay_6 || 0),
-
-        bill_amt1: parseFloat(data.bill_amt1 || 0),
-        bill_amt2: 0,   // or parseFloat(data.bill_amt2 || 0) if you add the field later
-        bill_amt3: 0,
-        bill_amt4: 0,
-        bill_amt5: 0,
-        bill_amt6: parseFloat(data.bill_amt6 || 0),
-
-        pay_amt1:  parseFloat(data.pay_amt1  || 0),
-        pay_amt2:  0,
-        pay_amt3:  0,
-        pay_amt4:  0,
-        pay_amt5:  0,
-        pay_amt6:  parseFloat(data.pay_amt6  || 0)
-    });
-
-    // In your ManualRiskAssessment.tsx, find the predict function around line 117
-
+    // ✅ SINGLE PREDICT FUNCTION - Using safeParse helpers
     const predict = async () => {
         try {
             setLoading(true);
             setError(null);
 
-            // Force integer fields to be actual integers (no .0)
+            // Helper functions for safe parsing
             const safeParseInt = (val: string, defaultVal: number = 0) => {
                 const num = parseInt(val, 10);
                 return isNaN(num) ? defaultVal : num;
@@ -130,12 +99,13 @@ export default function ManualAssessment() {
                 return isNaN(num) ? defaultVal : num;
             };
 
+            // Create payload with ALL 23 fields
             const payload = {
                 limit_bal: safeParseFloat(form.limit_bal),
-                age:       safeParseInt(form.age),
-                sex:       safeParseInt(form.sex, 1),
+                age: safeParseInt(form.age),
+                sex: safeParseInt(form.sex, 1),
                 education: safeParseInt(form.education, 2),
-                marriage:  safeParseInt(form.marriage, 1),
+                marriage: safeParseInt(form.marriage, 1),
 
                 pay_0: safeParseInt(form.pay_0),
                 pay_2: safeParseInt(form.pay_2),
@@ -162,19 +132,46 @@ export default function ManualAssessment() {
             console.log('📤 Sending payload:', JSON.stringify(payload, null, 2));
 
             const response = await axios.post(
-                `${API_BASE_URL}/predict`,   // ← better to use the variable here too
+                `${API_BASE_URL}/predict`,
                 payload,
-                { headers: { 'Content-Type': 'application/json' } }
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    timeout: 10000
+                }
             );
 
             console.log('✅ Response:', response.data);
             setResult(response.data);
 
-            // scroll...
+            // Scroll to results
+            setTimeout(() => {
+                document.getElementById('results-section')?.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+            }, 100);
+
         } catch (error: any) {
             console.error('❌ Prediction error:', error);
-            if (error.response?.status === 422) {
-                setError("Validation error: " + (error.response.data?.detail?.[0]?.msg || "Check all fields are valid numbers"));
+
+            if (error.code === 'ECONNABORTED') {
+                setError("Request timeout - backend took too long to respond");
+            } else if (error.response) {
+                console.error('Response data:', error.response.data);
+                console.error('Response status:', error.response.status);
+
+                if (error.response.status === 422) {
+                    setError("Validation error: " + JSON.stringify(error.response.data));
+                } else if (error.response.status === 503) {
+                    setError("Model not loaded on backend");
+                } else {
+                    setError(`Server error (${error.response.status}): ${error.response.data?.error || 'Unknown error'}`);
+                }
+            } else if (error.request) {
+                setError(`Cannot connect to backend at ${API_BASE_URL}. Make sure it's running.`);
             } else {
                 setError(error.message || 'Failed to get prediction');
             }
@@ -270,7 +267,6 @@ export default function ManualAssessment() {
 
         setForm((prev) => ({ ...prev, ...demo }));
 
-        // Expand all sections on mobile when demo is loaded
         if (window.innerWidth < 640) {
             setExpandedSections({
                 basic: true,
@@ -369,7 +365,7 @@ export default function ManualAssessment() {
                 </div>
             </div>
 
-            {/* Demo Buttons - Scrollable on mobile */}
+            {/* Demo Buttons */}
             <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sticky top-20 bg-slate-50 z-10">
                 <button
                     onClick={() => loadDemo("low")}
@@ -396,12 +392,12 @@ export default function ManualAssessment() {
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                     <p className="text-sm text-amber-800 flex items-center gap-2">
                         <AlertTriangle size={16} />
-                        ⚠️ Backend server is not responding. Make sure it's running on render.com
+                        ⚠️ Backend server is not responding. Make sure it's running.
                     </p>
                 </div>
             )}
 
-            {/* Form - Now with collapsible sections on mobile */}
+            {/* Form */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden" ref={formRef}>
                 {/* Mobile View - Collapsible Sections */}
                 <div className="block sm:hidden">
@@ -441,7 +437,7 @@ export default function ManualAssessment() {
                     ])}
                 </div>
 
-                {/* Desktop View - Grid Layout */}
+                {/* Desktop View */}
                 <div className="hidden sm:block p-6">
                     <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
                         {/* Basic Info */}
@@ -477,7 +473,7 @@ export default function ManualAssessment() {
                     </div>
                 </div>
 
-                {/* Action Buttons - Always visible */}
+                {/* Action Buttons */}
                 <div className="p-4 sm:p-6 border-t border-slate-200">
                     <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                         <button
